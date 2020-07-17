@@ -17,8 +17,6 @@ const char *clientcert = MQTT_CLIENT_CERT;
 const char *clientkey = MQTT_CLIENT_KEY;
 
 
-
-
 /* Set the SSID and Password via project configuration, or can set directly here */
 #define DEFAULT_SSID WIFI_SSID
 #define DEFAULT_PWD WIFI_PASS
@@ -90,7 +88,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
 }
 
 /* Initialize Wi-Fi as sta and set scan method */
-static void fast_scan(void) {
+void fast_scan(void) {
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
