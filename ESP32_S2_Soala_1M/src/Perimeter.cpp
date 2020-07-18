@@ -27,9 +27,9 @@ int GetCurrentMagnitudeRight() {
 
 int GetCurrentMagnitudeLeft() {
     if (MowerIsInsideWire()) {
-        currentMagnitudeLeft = -500;
-    } else {
         currentMagnitudeLeft = 500;
+    } else {
+        currentMagnitudeLeft = -500;
     }
     return currentMagnitudeLeft;
 }

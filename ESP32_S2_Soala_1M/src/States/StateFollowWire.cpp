@@ -17,7 +17,7 @@ unsigned long lastTimeFollowWire = 0;
 bool dockedFollowWire = false;
 bool lastInside = false;
 unsigned long onSameSiteMillis = 0;
-unsigned long onSameSiteMillisShortMax = 2000;
+unsigned long onSameSiteMillisShortMax = 3000;
 unsigned long onOtherSiteMillis = 0;
 int motorLeftSpeed = 0;
 int motorRightSpeed = 0;
@@ -75,6 +75,8 @@ int mowerSide = 0; // -1 left 0 middle 1 right
 int lastMowerSide = 0;
 unsigned long timeOnSameSide = 0;
 unsigned long timeLastCheck = 0;
+
+unsigned long lastChangeSideTime = millis();
 
 speedCalculationResult calculateMotorspeed() {
 
@@ -161,28 +163,32 @@ void followFunction() {
     int magnitude = GetCurrentMagnitudeLeft();
     bool inside = MowerIsInsideWire();
 
+    bool changeSideAction = false;
+
     if (inside == lastInside) {
 
         onSameSiteMillis = onSameSiteMillis + (millis() - lastTimeFollowWire);
 
-        if (onSameSiteMillis > eeprom_max_same_side_tracking_wire_time) {
+        // if (onSameSiteMillis > eeprom_max_same_side_tracking_wire_time) {
 
-            if (inside == false) {
-                TriggerFSM(currentState, STATE_FIND_WIRE_BACKWARDS, currentFSMSequence);
-                return;
-            } else {
-                // backwards, random rotate, findWireForwards, continue...
-                MotorAction_StopMotors();
-                delay(500);
-                MotorAction_SetPinsToGoBackwards();
-                MotorAction_GoSlowSpeed();
-                delay(1500);
-                TriggerFSM(currentState, STATE_RANDOM_ROTATE, currentFSMSequence);
-                return;
-            }
-        }
+        //     if (inside == false) {
+        //         TriggerFSM(currentState, STATE_FIND_WIRE_BACKWARDS, currentFSMSequence);
+        //         return;
+        //     } else {
+        //         // backwards, random rotate, findWireForwards, continue...
+        //         MotorAction_StopMotors();
+        //         delay(500);
+        //         MotorAction_SetPinsToGoBackwards();
+        //         MotorAction_GoSlowSpeed();
+        //         delay(1500);
+        //         TriggerFSM(currentState, STATE_RANDOM_ROTATE, currentFSMSequence);
+        //         return;
+        //     }
+        // }
 
         if (onSameSiteMillis > onSameSiteMillisShortMax) {
+
+            changeSideAction = true;
 
             if (eeprom_perimeter_is_clockwise_from_garage == 1) {
 
@@ -193,7 +199,6 @@ void followFunction() {
                 } else {
                     MotorAction_SetPinsToRotateLeft();
                 }
-
             } else {
                 if (inside) {
                     MotorAction_SetPinsToRotateLeft();
@@ -202,18 +207,15 @@ void followFunction() {
                 }
             }
         }
-
-    } else {
-        lastInside = inside;
-        onSameSiteMillis = 0;
     }
+
+    lastTimeFollowWire = millis();
 
     int speedLeft = 255;
     int speedRight = 255;
 
     if (eeprom_perimeter_is_clockwise_from_garage == 1) {
 
-        // if (inside == true) {
         // anhand der magnitude * p links bisschen weniger speed
         // magnitude ist z.B. -1000 eeprom_max_tracking_wire_magnitude_inside
 
@@ -223,14 +225,14 @@ void followFunction() {
 
             // right turn
             speedLeft = 255;
-            speedRight = 255 - (mag_error * (eeprom_p_value / 100.0));
+            speedRight = 255 - (eeprom_max_tracking_wire_magnitude_inside * (eeprom_p_value / 100.0));
             if (speedRight > 255) {
                 speedRight = 255;
             }
-            if (speedRight >= 0) {
+            if (speedRight >= 0 && !changeSideAction) {
                 MotorAction_SetPinsToGoForward();
             }
-            if (speedRight < 0) {
+            if (speedRight < 0 && !changeSideAction) {
                 speedRight = (-1 * speedRight) + 220;
                 if (speedRight > 255) {
                     speedRight = 255;
@@ -242,14 +244,14 @@ void followFunction() {
 
             // left turn
             speedRight = 255;
-            speedLeft = 255 + (mag_error * (eeprom_p_value / 100.0));
+            speedLeft = 255 + ((-eeprom_max_tracking_wire_magnitude_inside) * (eeprom_p_value / 100.0));
             if (speedLeft > 255) {
                 speedLeft = 255;
             }
-            if (speedLeft >= 0) {
+            if (speedLeft >= 0 && !changeSideAction) {
                 MotorAction_SetPinsToGoForward();
             }
-            if (speedLeft < 0) {
+            if (speedLeft < 0 && !changeSideAction) {
                 speedLeft = (-1 * speedLeft) + 220;
                 if (speedLeft > 255) {
                     speedLeft = 255;
@@ -257,20 +259,23 @@ void followFunction() {
                 MotorAction_SetPinsToRotateLeft();
             }
         }
-        //}
     } else {
         // ccw ...
     }
 
+    if (inside != lastInside) {
+        lastInside = inside;
+        onSameSiteMillis = 0;
+        lastChangeSideTime = millis();
+        changeSideAction = false;
+    }
 
     lcd.setCursor(0, 0);
-    lcd.print(String(speedLeft) + "   " + String(speedRight) + "        ");
+    lcd.print(String(speedLeft) + " " + String(speedRight) + " " + String(onSameSiteMillis) + "              ");
 
     speedCalculationResult speedResult = {speedLeft, speedRight};
 
     MotorAction_GoPWMSpeed(speedResult.leftSpeed, speedResult.rightSpeed);
-
-    lastTimeFollowWire = millis();
 }
 
 
@@ -289,6 +294,8 @@ void followWire_on_enter() {
     clearLCD();
     startTimeFollowWire = millis();
     lastTimeFollowWire = startTimeFollowWire;
+    lastChangeSideTime = startTimeFollowWire;
+    onSameSiteMillisShortMax = eeprom_max_same_side_tracking_wire_time;
     onSameSiteMillis = 0;
     motorLeftSpeed = 0;
     motorRightSpeed = 0;
@@ -310,123 +317,6 @@ void followWire() {
 
     followFunction();
 
-    // bool inside = MowerIsInsideWire();
-
-    // int magnitude = GetCurrentMagnitudeLeft();
-
-    // if (magnitude > 0) {
-
-    //     if (lastInside != inside) {
-    //         onSameSiteMillis = 0;
-    //         lastInside = inside;
-    //         onOtherSiteMillis += (currentMillisGlobal - lastTimeFollowWire);
-    //     } else {
-    //         onSameSiteMillis += (currentMillisGlobal - lastTimeFollowWire);
-    //         onOtherSiteMillis = 0;
-    //     }
-
-    //     if (eeprom_perimeter_is_clockwise_from_garage == 1) {
-
-    //         motorRightSpeed = slowSpeedRight;
-    //         motorLeftSpeed = slowSpeedLeft - sFunction(magnitude, eeprom_max_tracking_wire_magnitude_inside, eeprom_max_tracking_wire_magnitude_outside, slowSpeedLeft, onSameSiteMillis,
-    //                                                    onOtherSiteMillis, eeprom_max_same_side_tracking_wire_time);
-
-    //         // lcd.setCursor(0, 0);
-    //         // lcd.print("RightSpeed " + String(motorRightSpeed) + "         ");
-    //         // lcd.setCursor(0, 1);
-    //         // lcd.print("LeftSpeed " + String(motorLeftSpeed) + "         ");
-
-    //         if (motorLeftSpeed < 0) {
-    //             motorLeftSpeed = 0;
-    //         } else if (motorLeftSpeed > slowSpeedLeft) {
-    //             motorLeftSpeed = slowSpeedLeft;
-    //         }
-
-    //         // if (onSameSiteMillis > eeprom_max_same_side_tracking_wire_time) {
-    //         //     MotorAction_SetPinsToRotateLeft();
-    //         //     motorLeftSpeed = slowSpeedLeft;
-    //         //     motorRightSpeed = slowSpeedRight;
-    //         // } else {
-    //         //     MotorAction_SetPinsToGoForward();
-    //         // }
-
-    //     } else {
-
-    //         motorLeftSpeed = slowSpeedLeft;
-    //         motorRightSpeed = slowSpeedRight - sFunction(magnitude, eeprom_max_tracking_wire_magnitude_inside, eeprom_max_tracking_wire_magnitude_outside, slowSpeedRight, onSameSiteMillis,
-    //                                                      onOtherSiteMillis, eeprom_max_same_side_tracking_wire_time);
-    //         if (motorRightSpeed < 0) {
-    //             motorRightSpeed = 0;
-    //         } else if (motorRightSpeed > slowSpeedRight) {
-    //             motorRightSpeed = slowSpeedRight;
-    //         }
-
-    //         if (onSameSiteMillis > eeprom_max_same_side_tracking_wire_time) {
-    //             MotorAction_SetPinsToRotateRight();
-    //             motorLeftSpeed = slowSpeedLeft;
-    //             motorRightSpeed = slowSpeedRight;
-    //         } else {
-    //             MotorAction_SetPinsToGoForward();
-    //         }
-    //     }
-
-    // } else if (magnitude < 0) {
-
-    //     if (lastInside != inside) {
-    //         onSameSiteMillis = 0;
-    //         lastInside = inside;
-    //         onOtherSiteMillis += (currentMillisGlobal - lastTimeFollowWire);
-    //     } else {
-    //         onSameSiteMillis = onSameSiteMillis + (currentMillisGlobal - lastTimeFollowWire);
-    //         onOtherSiteMillis = 0;
-    //     }
-
-    //     if (eeprom_perimeter_is_clockwise_from_garage == 1) {
-
-    //         motorLeftSpeed = slowSpeedLeft;
-    //         motorRightSpeed = slowSpeedRight - sFunction(magnitude, eeprom_max_tracking_wire_magnitude_inside, eeprom_max_tracking_wire_magnitude_outside, slowSpeedRight, onSameSiteMillis,
-    //                                                      onOtherSiteMillis, eeprom_max_same_side_tracking_wire_time);
-
-    //         // lcd.setCursor(0, 0);
-    //         // lcd.print("RightSpeed " + String(motorRightSpeed) + "         ");
-    //         // lcd.setCursor(0, 1);
-    //         // lcd.print("LeftSpeed " + String(motorLeftSpeed) + "         ");
-
-    //         if (motorRightSpeed < 0) {
-    //             motorRightSpeed = 0;
-    //         } else if (motorRightSpeed > slowSpeedRight) {
-    //             motorRightSpeed = slowSpeedRight;
-    //         }
-
-    //         // if (onSameSiteMillis > eeprom_max_same_side_tracking_wire_time) {
-    //         //     MotorAction_SetPinsToRotateRight();
-    //         //     motorLeftSpeed = slowSpeedLeft;
-    //         //     motorRightSpeed = slowSpeedRight;
-    //         // } else {
-    //         //     MotorAction_SetPinsToGoForward();
-    //         // }
-
-    //     } else {
-
-    //         motorRightSpeed = slowSpeedRight;
-    //         motorLeftSpeed = slowSpeedLeft - sFunction(magnitude, eeprom_max_tracking_wire_magnitude_inside, eeprom_max_tracking_wire_magnitude_outside, slowSpeedLeft, onSameSiteMillis,
-    //                                                    onOtherSiteMillis, eeprom_max_same_side_tracking_wire_time);
-    //         if (motorLeftSpeed < 0) {
-    //             motorLeftSpeed = 0;
-    //         } else if (motorLeftSpeed > slowSpeedLeft) {
-    //             motorLeftSpeed = slowSpeedLeft;
-    //         }
-
-    // if (onSameSiteMillis > eeprom_max_same_side_tracking_wire_time) {
-    //     MotorAction_SetPinsToRotateLeft();
-    //     motorLeftSpeed = slowSpeedLeft;
-    //     motorRightSpeed = slowSpeedRight;
-    // } else {
-    //     MotorAction_SetPinsToGoForward();
-    // }
-    //     }
-    // }
-
     if (currentFSMSequence == FSMSEQUENCE_ZONE_1) {
         if ((millis() - startTimeFollowWire) >= eeprom_follow_wire_zone_1_time) {
             TriggerFSM(STATE_FOLLOW_WIRE, STATE_WIRE_TO_GARDEN, currentFSMSequence);
@@ -439,8 +329,6 @@ void followWire() {
         }
     }
 
-    // lastTimeFollowWire = currentMillisGlobal;
-    // MotorAction_GoPWMSpeed(motorLeftSpeed, motorRightSpeed);
     read_followWire_keys();
 }
 

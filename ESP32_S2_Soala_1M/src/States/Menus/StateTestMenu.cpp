@@ -51,7 +51,6 @@ void testMenu() {
     String menuname = testMenuNames[testMenu_currentMenu];
 
     if (testMenu_currentMenu == 0) {
-        ReceiveSerialData();
         lcd.setCursor(0, 0);
         String insideOutside = MowerIsInsideWire() == 0 ? "Outside" : "Inside";
         lcd.print(menuname + " " + insideOutside + "            ");
@@ -115,8 +114,7 @@ void testMenu() {
         MotorAction_StopMotors();
         MotorAction_StopBlades();
     } else if (testMenu_currentMenu == 6) {
-        // MotorAction_SetPinsToGoForward();
-        MotorAction_SetPinsToOnlyLeft();
+        MotorAction_SetPinsToGoForward();
         MotorAction_GoFullSpeed();
         MotorAction_StopBlades();
         RelaisOn();

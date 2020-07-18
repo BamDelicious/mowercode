@@ -113,6 +113,10 @@ void Loop_FSM() {
     case STATE_RANDOM_ROTATE:
     case STATE_ROTATE_TO_WIRE:
     case STATE_WIRE_TO_GARDEN:
+    case STATE_DOCKED:
+    case STATE_DOCKED_MENU:
+    case STATE_ERROR:
+    case STATE_TEST_MENU:
         ReceiveSerialData();
         break;
     default:
